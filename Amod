@@ -1,0 +1,65 @@
+from telethon import TelegramClient, events, errors
+import os
+import asyncio
+
+# --- Telegram API credentials --- 
+api_id = 28488540
+api_hash = 'def48bcc9e9feca452b9f83d5b35b4af'
+
+# --- Session setup --- 
+session_dir = os.path.expanduser(r'~/telethon_sessions')
+os.makedirs(session_dir, exist_ok=True)
+session_file = os.path.join(session_dir, 'forwarder.session')
+
+# --- Multiple forwarding rules: source_id -> target_id --- 
+forwarding_rules = {
+    -1002556599693: -1001317019225,
+    -1002583980785: -1001981081805,
+    -1002596996063: -1002152774104,
+    -1002538556303: -1001684012047,
+    -1002681208805: -1002105064720,
+    -1002538338888: -1002076032179,
+    -1002660512325: -1002002941997,
+    -1002564956393: -1001949687593,
+    -1002668691855: -1002125044146,
+    -1002592044037: -1002305683378,
+    # add more forwarding pairs here...
+}
+
+# --- Initialize client --- 
+client = TelegramClient(session_file, api_id, api_hash)
+
+
+# --- Forward message logic --- 
+@client.on(events.NewMessage(chats=list(forwarding_rules.keys())))
+async def handler(event):
+    source_id = event.chat_id
+    target_id = forwarding_rules.get(source_id)
+
+    if not target_id:
+        print(f"No forwarding rule for chat {source_id}.")
+        return
+
+    try:
+        # Forward the message, retaining media and content
+        await event.forward_to(target_id)
+        print(f"✅ Forwarded from {source_id} to {target_id}")
+
+    except errors.FloodWaitError as e:
+        print(f"Rate limited. Waiting for {e.seconds} seconds.")
+        await asyncio.sleep(e.seconds)
+        # After waiting, try forwarding again
+        try:
+            await event.forward_to(target_id)
+            print(f"✅ Forwarded from {source_id} to {target_id} after waiting.")
+        except Exception as e:
+            print(f"❌ Failed after waiting: {e}")
+
+    except Exception as e:
+        print(f"❌ Failed to forward from {source_id} to {target_id}: {e}")
+
+
+print("🔄 Starting Telegram client...")
+client.start()
+print("✅ Client started. Listening for messages...")
+client.run_until_disconnected()
